@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>激活码管理后台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f1f5f9; color: #1e293b; padding: 20px; font-size: 14px; }
+.container { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 20px; margin-bottom: 16px; color: #0f172a; }
+.card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.login-card { max-width: 360px; margin: 80px auto; }
+label { display: block; font-size: 13px; color: #64748b; margin-bottom: 4px; }
+input, select { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+button { padding: 8px 18px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; transition: all .15s; }
+button:hover { background: #1d4ed8; }
+button.ghost { background: #f1f5f9; color: #475569; }
+button.ghost:hover { background: #e2e8f0; }
+button.danger { background: #dc2626; }
+button.danger:hover { background: #b91c1c; }
+.row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.row > div { flex: 1; min-width: 120px; }
+.result-box { margin-top: 12px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; }
+.result-box .code { font-size: 20px; font-weight: 600; color: #065f46; letter-spacing: 2px; font-family: monospace; }
+.result-box .meta { font-size: 12px; color: #047857; margin-top: 4px; }
+.copy-btn { margin-top: 8px; padding: 4px 12px; font-size: 12px; background: #10b981; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+th { background: #f8fafc; color: #475569; font-weight: 500; }
+tr:hover { background: #f8fafc; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+.tag.active { background: #dcfce7; color: #166534; }
+.tag.revoked { background: #fee2e2; color: #991b1b; }
+.tag.expired { background: #fef3c7; color: #92400e; }
+.actions button { padding: 3px 8px; font-size: 12px; margin-right: 4px; }
+.overview { display: flex; gap: 16px; margin-bottom: 8px; }
+.overview .stat { background: #f8fafc; padding: 10px 16px; border-radius: 8px; }
+.overview .stat .num { font-size: 20px; font-weight: 600; color: #1e293b; }
+.overview .stat .lbl { font-size: 12px; color: #64748b; }
+.hidden { display: none; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 8px 20px; border-radius: 6px; font-size: 13px; z-index: 999; }
+.device-list { margin-top: 8px; }
+.device-list .item { padding: 8px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🔐 激活码管理后台</h1>
+
+    <!-- 登录 -->
+    <div class="card login-card" id="loginCard">
+        <label>管理密码</label>
+        <input type="password" id="pwdInput" placeholder="输入管理密码" autofocus>
+        <button onclick="login()" style="width:100%">登录</button>
+    </div>
+
+    <!-- 主面板 -->
+    <div id="panel" class="hidden">
+        <!-- 生成激活码 -->
+        <div class="card">
+            <h3 style="margin-bottom:12px">生成新激活码</h3>
+            <div class="row">
+                <div>
+                    <label>套餐</label>
+                    <select id="genPlan">
+                        <option value="monthly">月卡（30天）</option>
+                        <option value="quarterly">季卡（90天）</option>
+                        <option value="halfyear">半年卡（180天）</option>
+                        <option value="yearly" selected>年卡（365天）</option>
+                        <option value="trial">试用（7天）</option>
+                    </select>
+                </div>
+                <div>
+                    <label>设备数</label>
+                    <select id="genDevices">
+                        <option value="2" selected>2 台（个人版）</option>
+                        <option value="5">5 台（团队版）</option>
+                        <option value="10">10 台（企业版）</option>
+                    </select>
+                </div>
+                <div>
+                    <label>备注（可选）</label>
+                    <input type="text" id="genNote" placeholder="买家微信/手机号">
+                </div>
+                <div>
+                    <button onclick="generate()">生成激活码</button>
+                </div>
+            </div>
+            <div id="genResult"></div>
+        </div>
+
+        <!-- 概览 -->
+        <div class="card">
+            <div class="overview" id="overview">
+                <div class="stat"><div class="num" id="statTotal">-</div><div class="lbl">已生成</div></div>
+                <div class="stat"><div class="num" id="statActive">-</div><div class="lbl">有效</div></div>
+                <div class="stat"><div class="num" id="statDevices">-</div><div class="lbl">已激活设备</div></div>
+            </div>
+        </div>
+
+        <!-- 历史列表 -->
+        <div class="card">
+            <h3 style="margin-bottom:8px">激活码列表 <button class="ghost" style="float:right;padding:4px 12px" onclick="loadList()">刷新</button></h3>
+            <table>
+                <thead>
+                    <tr><th>激活码</th><th>套餐</th><th>设备</th><th>到期</th><th>已绑</th><th>备注</th><th>状态</th><th>操作</th></tr>
+                </thead>
+                <tbody id="listBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let PWD = '';
+const API = '/api/admin';
+
+function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2000);
+}
+
+function login() {
+    PWD = document.getElementById('pwdInput').value.trim();
+    if (!PWD) { toast('请输入密码'); return; }
+    fetch(API + '?action=list&password=' + encodeURIComponent(PWD))
+        .then(r => r.json())
+        .then(r => {
+            if (r.ok) {
+                document.getElementById('loginCard').classList.add('hidden');
+                document.getElementById('panel').classList.remove('hidden');
+                renderList(r.list);
+            } else {
+                toast(r.reason || '密码错误');
+                PWD = '';
+            }
+        })
+        .catch(e => toast('网络错误：' + e.message));
+}
+
+function generate() {
+    const plan = document.getElementById('genPlan').value;
+    const devices = document.getElementById('genDevices').value;
+    const note = document.getElementById('genNote').value;
+    fetch(API + '?action=generate&password=' + encodeURIComponent(PWD), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, devices: parseInt(devices), note })
+    })
+    .then(r => r.json())
+    .then(r => {
+        if (r.ok) {
+            const box = document.getElementById('genResult');
+            box.innerHTML = '<div class="result-box"><div class="code">' + r.code_id + '</div>' +
+                '<div class="meta">套餐：' + r.plan_name + ' | 设备：' + r.devices + ' 台 | 到期：' + r.expires_at + '</div>' +
+                '<button class="copy-btn" onclick="copyCode(\'' + r.code_id + '\')">复制激活码</button></div>';
+            toast('生成成功');
+            loadList();
+        } else {
+            toast(r.reason || '生成失败');
+        }
+    })
+    .catch(e => toast('网络错误：' + e.message));
+}
+
+function copyCode(code) {
+    navigator.clipboard.writeText(code).then(() => toast('已复制：' + code));
+}
+
+function loadList() {
+    fetch(API + '?action=list&password=' + encodeURIComponent(PWD))
+        .then(r => r.json())
+        .then(r => { if (r.ok) renderList(r.list); else toast(r.reason); });
+}
+
+function renderList(list) {
+    const tbody = document.getElementById('listBody');
+    const now = new Date();
+    let activeCount = 0, deviceCount = 0;
+    tbody.innerHTML = '';
+    (list || []).forEach(l => {
+        const expired = new Date(l.expires_at) < now;
+        const isActive = l.status === 'active' && !expired;
+        if (isActive) activeCount++;
+        deviceCount += l.activation_count || 0;
+        const tagClass = l.status === 'revoked' ? 'revoked' : (expired ? 'expired' : 'active');
+        const tagText = l.status === 'revoked' ? '已撤销' : (expired ? '已过期' : '有效');
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td style="font-family:monospace;font-weight:600">' + l.code_id + '</td>' +
+            '<td>' + l.plan_name + '</td>' +
+            '<td>' + l.devices + '</td>' +
+            '<td>' + l.expires_at + '</td>' +
+            '<td>' + l.activation_count + '</td>' +
+            '<td>' + (l.note || '') + '</td>' +
+            '<td><span class="tag ' + tagClass + '">' + tagText + '</span></td>' +
+            '<td class="actions">' +
+                '<button class="ghost" onclick="showDevices(\'' + l.code_id + '\')">设备</button>' +
+                (isActive ? '<button class="danger" onclick="revoke(\'' + l.code_id + '\')">撤销</button>' : '') +
+            '</td>';
+        tbody.appendChild(tr);
+    });
+    document.getElementById('statTotal').textContent = (list || []).length;
+    document.getElementById('statActive').textContent = activeCount;
+    document.getElementById('statDevices').textContent = deviceCount;
+}
+
+function showDevices(codeId) {
+    fetch(API + '?action=devices&password=' + encodeURIComponent(PWD) + '&code_id=' + encodeURIComponent(codeId))
+        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) { toast(r.reason); return; }
+            const devices = r.devices || [];
+            if (devices.length === 0) { toast('此激活码尚未绑定任何设备'); return; }
+            let html = '<div class="card"><h3>' + codeId + ' 绑定的设备（' + devices.length + '台）</h3><div class="device-list">';
+            devices.forEach(d => {
+                const info = d.device_info || '未知设备';
+                const shortKey = d.device_key.substring(0, 12) + '...';
+                const lastSeen = new Date(d.last_seen).toLocaleString('zh-CN');
+                html += '<div class="item"><div><div style="font-weight:500">' + info + '</div>' +
+                    '<div style="font-size:11px;color:#94a3b8">指纹：' + shortKey + ' | 最后在线：' + lastSeen + '</div></div>' +
+                    '<button class="danger" onclick="unbind(\'' + codeId + '\',\'' + d.device_key + '\')">解绑</button></div>';
+            });
+            html += '</div></div>';
+            const w = window.open('', '_blank', 'width=500,height=500');
+            w.document.write('<html><head><title>设备管理</title><style>body{font-family:sans-serif;padding:20px;background:#f1f5f9}' +
+                '.item{background:#fff;padding:10px;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}' +
+                'button{padding:4px 10px;background:#dc2626;color:#fff;border:none;border-radius:4px;cursor:pointer}</style></head><body>' +
+                '<h2>' + codeId + ' 设备管理</h2>' + html.replace(/<[^>]*card[^>]*>/g, '') + '</body></html>');
+            w.document.close();
+            // 简化：直接 alert 列表
+        });
+}
+
+function unbind(codeId, deviceKey) {
+    if (!confirm('确认解绑此设备？解绑后该设备将无法继续使用，需重新激活。')) return;
+    fetch(API + '?action=unbind&password=' + encodeURIComponent(PWD), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code_id: codeId, device_key: deviceKey })
+    })
+    .then(r => r.json())
+    .then(r => {
+        toast(r.ok ? '已解绑' : (r.reason || '失败'));
+        if (r.ok) loadList();
+    });
+}
+
+function revoke(codeId) {
+    if (!confirm('确认撤销此激活码？撤销后所有已激活的设备都无法继续使用。')) return;
+    fetch(API + '?action=revoke&password=' + encodeURIComponent(PWD), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code_id: codeId })
+    })
+    .then(r => r.json())
+    .then(r => {
+        toast(r.ok ? '已撤销' : (r.reason || '失败'));
+        if (r.ok) loadList();
+    });
+}
+
+// 回车登录
+document.getElementById('pwdInput').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>
