@@ -1,0 +1,13 @@
+{
+  "name": "license-server-render",
+  "version": "1.0.0",
+  "description": "行程文档生成系统 - 激活码服务器 (Render 版)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "express": "^4.19.2"
+  }
+}
